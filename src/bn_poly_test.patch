@@ -1,0 +1,536 @@
+
+Index: src/libbn/tests/bn_poly_quartic_roots.c
+===================================================================
+--- src/libbn/tests/bn_poly_quartic_roots.c	(revision 56916)
++++ src/libbn/tests/bn_poly_quartic_roots.c	(working copy)
+@@ -34,33 +34,24 @@
+ 
+ 
+ /* holds three polynomials to be used in test. */
+-bn_poly_t input[3];
++bn_poly_t input[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ bn_complex_t rts[9];
+ 
+-struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
+ 
+-
+-/**
+- * Initialises quartic equations storing a negative, positive and zero coefficients.
++/* Initialises quartic equations storing a negative, positive and zero coefficients.
+  */
+ void
+ poly_init(void)
+ {
+-
+     /* initializes a zero equation */
+-
+-    input[0] = bn_Zero_poly;
+     input[0].dgr = 4;
+     input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = input[0].cf[3] = input[0].cf[4] = 0.0;
+ 
+     rts[0].re = rts[0].im = 0.0;
+ 
+-
+     /* initializes a negative quadratic eqn. */
+-    input[1] = bn_Zero_poly;
+     input[1].dgr = 4;
+ 
+-
+     input[1].cf[0] = -4, input[1].cf[1] = -3, input[1].cf[2] = -2, input[1].cf[3] = -25, input[1].cf[4] = -38;/* input coeff */
+ 
+     /**
+@@ -73,7 +64,6 @@
+     rts[4].re = -0.5903129767152558, rts[4].im = -0.263475942656035;
+ 
+     /* initializes a positive quadratic equation */
+-    input[2] = bn_Zero_poly;
+     input[2].dgr = 4;
+     input[2].cf[0] = 5478, input[2].cf[1] = 5485, input[2].cf[2] = 458, input[2].cf[3] = 258564, input[2].cf[4] = 54785;/* input coeff */
+ 
+@@ -137,18 +127,16 @@
+ main(void)
+ {
+     int ret;
++
+     poly_init();
+     ret = test_bn_poly_qua_rts();
+ 
+-    if (ret == 0) {
+-	bu_log("\nFunction computes correctly\n");
+-	return ret;
++    if (ret)
++	bu_log("[FAIL] %s test failed\n", __FILE__);
++    else
++	bu_log("[PASS] %s test passed\n", __FILE__);
+ 
+-    } else
+-	exit(EXIT_FAILURE);
+-
+     return 0;
+-
+ }
+ 
+ 
+Index: src/libbn/tests/bn_poly_multiply.c
+===================================================================
+--- src/libbn/tests/bn_poly_multiply.c	(revision 56916)
++++ src/libbn/tests/bn_poly_multiply.c	(working copy)
+@@ -1,7 +1,7 @@
+-/*              T E S T _ B N _ P O L Y _ M U L T I P L Y . C
++/*         B N _ P O L Y _ M U L T I P L Y . C
+  * BRL-CAD
+  *
+- * Copyright (c) 2004-2013 United States Government as represented by
++ * Copyright (c) 2013 United States Government as represented by
+  * the U.S. Army Research Laboratory.
+  *
+  * This library is free software; you can redistribute it and/or
+@@ -31,22 +31,17 @@
+ #include "magic.h"
+ 
+ 
+-struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
+-
+ /*holds three polynomials to be used in test.*/
+-bn_poly_t input[3], output[3];
++bn_poly_t input[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
++bn_poly_t output[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+ 
+-/*
+- *Initialises polynomial storing negative, positive and zero coefficients.
++/* Initialises polynomial storing negative, positive and zero coefficients.
+  */
+ void
+ poly_init(void)
+ {
+-
+     /*stores coefficients (zeros) to polynomial for input and output.*/
+-    output[0] = bn_Zero_poly;
+-    input[0] = bn_Zero_poly;
+     input[0].dgr = 2;
+     input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = input[0].cf[3] = 0.0;
+ 
+@@ -54,8 +49,6 @@
+     output[0].cf[0] = output[0].cf[1] = output[0].cf[2] = output[0].cf[3] = output[0].cf[4] = 0.0;
+ 
+     /*stores negative coefficients to polynomial.*/
+-    output[1] = bn_Zero_poly;
+-    input[1] = bn_Zero_poly;
+     input[1].dgr = 2;
+     output[1].dgr = 4;
+ 
+@@ -67,7 +60,6 @@
+      * The known output values used for these tests were generated from
+      * GNU Octave, version 3.4.3
+      */
+-
+     output[1].cf[0] = 16;
+     output[1].cf[1] = 24;
+     output[1].cf[2] = 25;
+@@ -75,8 +67,6 @@
+     output[1].cf[4] = 4;
+ 
+     /*stores positive coefficients to to polynomial input.*/
+-    output[2] = bn_Zero_poly;
+-    input[2] = bn_Zero_poly;
+     input[2].dgr = 2;
+     output[2].dgr = 4;
+ 
+@@ -108,20 +98,19 @@
+ }
+ 
+ 
+-/*tests the polynomials to make sure bn_poly_mul() works properly.*/
++/* tests the polynomials to make sure bn_poly_mul() works properly. */
+ int test_bn_poly(void)
+ {
+     int val, val1, val2;
+-    bn_poly_t a, b, c;
+-    a = bn_Zero_poly, b = bn_Zero_poly, c = bn_Zero_poly;
++    bn_poly_t a[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+-    bn_poly_mul(&a, &input[0], &input[0]);
+-    bn_poly_mul(&b, &input[1], &input[1]);
+-    bn_poly_mul(&c, &input[2], &input[2]);
++    bn_poly_mul(&a[0], &input[0], &input[0]);
++    bn_poly_mul(&a[1], &input[1], &input[1]);
++    bn_poly_mul(&a[2], &input[2], &input[2]);
+ 
+-    val = check_results(a.cf,output[0].cf, output[0].dgr + 1);
+-    val1 = check_results( b.cf, output[1].cf, output[1].dgr + 1);
+-    val2 = check_results(c.cf, output[2].cf, output[2].dgr + 1);
++    val = check_results(a[0].cf,output[0].cf, output[0].dgr + 1);
++    val1 = check_results( a[1].cf, output[1].cf, output[1].dgr + 1);
++    val2 = check_results(a[2].cf, output[2].cf, output[2].dgr + 1);
+ 
+     if (val == 0 && val1 == 0 && val2 == 0)
+ 	return val;
+@@ -135,20 +124,14 @@
+     int ret;
+ 
+     poly_init();
+-
+     ret = test_bn_poly();
+ 
+-    if( ret == 0){
+-	bu_log("\nFunction computes correctly\n");
++    if (ret)
++	bu_log("[FAIL] %s test failed\n", __FILE__);
++    else
++	bu_log("[PASS] %s test passed\n", __FILE__);
+ 
+-	return ret;
+-    }
+-
+-    else {
+-	bu_log("\nInvalid output.\n");
+-    }
+-    return -1;
+-
++    return 0;
+ }
+ 
+ /*
+Index: src/libbn/tests/bn_poly_scale.c
+===================================================================
+--- src/libbn/tests/bn_poly_scale.c	(revision 56916)
++++ src/libbn/tests/bn_poly_scale.c	(working copy)
+@@ -1,4 +1,4 @@
+-/*              T E S T _ B N _ P O L Y _ S C A L E . C
++/*         B N _ P O L Y _ S C A L E . C
+  * BRL-CAD
+  *
+  * Copyright (c) 2013 United States Government as represented by
+@@ -34,20 +34,16 @@
+ 
+ 
+ /* holds three polynomials to be used in test. */
+-static bn_poly_t input[3], output[3];
++bn_poly_t input[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
++bn_poly_t output[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+ 
+-/**
+- * Initialises polynomial storing a negative, positive and zero coefficients.
++/* Initialises polynomial storing a negative, positive and zero coefficients.
+  */
+ void
+ poly_init(void)
+ {
+-    struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
+-
+-    /* stores 0 coefficients to polynomial for input and output. */
+-    output[0] = bn_Zero_poly;
+-    input[0] = bn_Zero_poly;
++    /* stores zero-coefficients to polynomial for input and output. */
+     input[0].dgr = 2;
+     input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = 0.0;
+ 
+@@ -55,8 +51,6 @@
+     output[0].cf[0] = output[0].cf[1] = output[0].cf[2] = 0.0;
+ 
+     /* stores negative coefficients to polynomial. */
+-    output[1] = bn_Zero_poly;
+-    input[1] = bn_Zero_poly;
+     input[1].dgr = 2;
+     output[1].dgr = 2;
+ 
+@@ -74,8 +68,6 @@
+ 
+ 
+     /* stores positive coefficients to to polynomial input. */
+-    output[2] = bn_Zero_poly;
+-    input[2] = bn_Zero_poly;
+     input[2].dgr = 2;
+     output[2].dgr = 2;
+ 
+@@ -131,16 +123,16 @@
+ main(void)
+ {
+     int ret;
+-    poly_init();
+ 
++    poly_init();
+     ret = test_bn_poly_scale();
+ 
+-    if (ret == 0) {
+-	bu_log("\nFunction computes correctly\n");
+-	return EXIT_SUCCESS;
+-    }
++    if (ret)
++	bu_log("[FAIL] %s test failed\n", __FILE__);
++    else
++	bu_log("[PASS] %s test passed\n", __FILE__);
+ 
+-    return EXIT_FAILURE;
++    return 0;
+ }
+ 
+ 
+Index: src/libbn/tests/bn_poly_add.c
+===================================================================
+--- src/libbn/tests/bn_poly_add.c	(revision 56916)
++++ src/libbn/tests/bn_poly_add.c	(working copy)
+@@ -1,4 +1,4 @@
+-/*              T E S T _ B N _ P O L Y _ A D D . C
++/*         B N _ P O L Y _ A D D . C
+  * BRL-CAD
+  *
+  * Copyright (c) 2013 United States Government as represented by
+@@ -34,20 +34,15 @@
+ 
+ 
+ /* holds three polynomials to be used in test. */
+-bn_poly_t input[3], output[3];
++bn_poly_t input[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
++bn_poly_t output[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+-struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
+-
+-
+-/**
+- *Initialises polynomial storing negative, positive and zero-value coefficients.
++/* Initialises polynomial storing negative, positive and zero-value coefficients.
+  */
+ void
+ poly_init(void)
+ {
+     /* stores zero-value coefficients to polynomial for input and output. */
+-    output[0] = bn_Zero_poly;
+-    input[0] = bn_Zero_poly;
+     input[0].dgr = 2;
+     input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = 0.0;
+ 
+@@ -55,8 +50,6 @@
+     output[0].cf[0] = output[0].cf[1] = output[0].cf[2] = 0.0;
+ 
+     /* stores negative coefficients to polynomial. */
+-    output[1] = bn_Zero_poly;
+-    input[1] = bn_Zero_poly;
+     input[1].dgr = 2;
+     output[1].dgr = 2;
+ 
+@@ -73,8 +66,6 @@
+     output[1].cf[2] = -550;
+ 
+     /* stores positive coefficients to to polynomial input. */
+-    output[2] = bn_Zero_poly;
+-    input[2] = bn_Zero_poly;
+     input[2].dgr = 2;
+     output[2].dgr = 2;
+ 
+@@ -110,16 +101,15 @@
+ test_bn_poly_add(void)
+ {
+     int val, val1, val2;
+-    bn_poly_t a, b, c;
+-    a = bn_Zero_poly, b = bn_Zero_poly, c = bn_Zero_poly;
++    bn_poly_t a[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+-    bn_poly_add(&a, &input[0], &input[0]);
+-    bn_poly_add(&b, &input[1], &input[1]);
+-    bn_poly_add(&c, &input[2], &input[2]);
++    bn_poly_add(&a[0], &input[0], &input[0]);
++    bn_poly_add(&a[1], &input[1], &input[1]);
++    bn_poly_add(&a[2], &input[2], &input[2]);
+ 
+-    val = check_results(a.cf,output[0].cf, output[0].dgr + 1);
+-    val1 = check_results(b.cf, output[1].cf, output[1].dgr + 1);
+-    val2 = check_results(c.cf, output[2].cf, output[2].dgr + 1);
++    val = check_results(a[0].cf,output[0].cf, output[0].dgr + 1);
++    val1 = check_results(a[1].cf, output[1].cf, output[1].dgr + 1);
++    val2 = check_results(a[2].cf, output[2].cf, output[2].dgr + 1);
+ 
+     if (val == 0 && val1 == 0 && val2 == 0)
+ 	return val;
+@@ -132,19 +122,18 @@
+ main(void)
+ {
+     int ret;
++
+     poly_init();
+     ret = test_bn_poly_add();
+ 
+-    if (ret == 0) {
+-	bu_log("Function computes correctly");
+-	exit(EXIT_SUCCESS);
+-    } else
+-	exit(EXIT_FAILURE);
++    if (ret)
++	bu_log("[FAIL] %s test failed\n", __FILE__);
++    else
++	bu_log("[PASS] %s test passed\n", __FILE__);
+ 
+     return 0;
+ }
+ 
+-
+ /*
+  * Local Variables:
+  * mode: C
+Index: src/libbn/tests/bn_poly_sub.c
+===================================================================
+--- src/libbn/tests/bn_poly_sub.c	(revision 56916)
++++ src/libbn/tests/bn_poly_sub.c	(working copy)
+@@ -32,20 +32,17 @@
+ #include "bn.h"
+ #include "magic.h"
+ 
++
+ /* holds three polynomials to be used in test. */
+-bn_poly_t input[3], output[3];
++bn_poly_t input[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
++bn_poly_t output[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+-struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
+-
+-/**
+- * Initialises polynomial storing negative, positive and zero coefficients.
++/* Initialises polynomial storing negative, positive and zero coefficients.
+  */
+ void
+ poly_init(void)
+ {
+     /* stores zero-value coefficients to polynomial for input and output. */
+-    output[0] = bn_Zero_poly;
+-    input[0] = bn_Zero_poly;
+     input[0].dgr = 2;
+     input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = 0.0;
+ 
+@@ -53,8 +50,6 @@
+     output[0].cf[0] = output[0].cf[1] = output[0].cf[2] = 0.0;
+ 
+     /* stores negative coefficients to polynomial. */
+-    output[1] = bn_Zero_poly;
+-    input[1] = bn_Zero_poly;
+     input[1].dgr = 2;
+     output[1].dgr = 2;
+ 
+@@ -71,8 +66,6 @@
+     output[1].cf[2] = -550;
+ 
+     /* stores positive coefficients to to polynomial input. */
+-    output[2] = bn_Zero_poly;
+-    input[2] = bn_Zero_poly;
+     input[2].dgr = 2;
+     output[2].dgr = 2;
+ 
+@@ -107,16 +100,15 @@
+ test_bn_poly_sub(void)
+ {
+     int val, val1, val2;
+-    bn_poly_t a, b, c;
+-    a = bn_Zero_poly, b = bn_Zero_poly, c = bn_Zero_poly;
++    bn_poly_t a[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ 
+-    bn_poly_sub(&a, &input[0], &input[0]);
+-    bn_poly_sub(&b, &input[1], &input[0]);
+-    bn_poly_sub(&c, &input[2], &input[1]);
++    bn_poly_sub(&a[0], &input[0], &input[0]);
++    bn_poly_sub(&a[1], &input[1], &input[0]);
++    bn_poly_sub(&a[2], &input[2], &input[1]);
+ 
+-    val = check_results(a.cf,output[0].cf, output[0].dgr + 1);
+-    val1 = check_results(b.cf, output[1].cf, output[1].dgr + 1);
+-    val2 = check_results(c.cf, output[2].cf, output[2].dgr + 1);
++    val = check_results(a[0].cf,output[0].cf, output[0].dgr + 1);
++    val1 = check_results(a[1].cf, output[1].cf, output[1].dgr + 1);
++    val2 = check_results(a[2].cf, output[2].cf, output[2].dgr + 1);
+ 
+     if (val == 0 && val1 == 0 && val2 == 0)
+ 	return val;
+@@ -129,16 +121,15 @@
+ main(void)
+ {
+     int ret;
++
+     poly_init();
+     ret = test_bn_poly_sub();
+ 
+-    if (ret == 0) {
++    if (ret)
++	bu_log("[FAIL] %s test failed\n", __FILE__);
++    else
++	bu_log("[PASS] %s test passed\n", __FILE__);
+ 
+-	bu_log("Function computes correctly\n");
+-	exit(EXIT_SUCCESS);
+-    } else
+-	exit(EXIT_FAILURE);
+-
+     return 0;
+ }
+ 
+Index: src/libbn/tests/bn_poly_cubic_roots.c
+===================================================================
+--- src/libbn/tests/bn_poly_cubic_roots.c	(revision 56916)
++++ src/libbn/tests/bn_poly_cubic_roots.c	(working copy)
+@@ -34,32 +34,24 @@
+ 
+ 
+ /* holds three polynomials to be used in test. */
+-bn_poly_t input[3];
++bn_poly_t input[3] = { BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO, BN_POLY_INIT_ZERO };
+ bn_complex_t rts[7];
+ 
+-struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
+ 
+-/**
+- * Initialises cubic equations storing a negative, positive and zero coefficients.
++/* Initialises cubic equations storing a negative, positive and zero coefficients.
+  */
+ void
+ poly_init(void)
+ {
+-
+     /* initializes a zero equation */
+-
+-    input[0] = bn_Zero_poly;
+     input[0].dgr = 3;
+     input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = input[0].cf[3] = 0.0;
+ 
+     rts[0].re = rts[0].im = 0.0;
+ 
+-
+     /* initializes a negative cubic eqn. */
+-    input[1] = bn_Zero_poly;
+     input[1].dgr = 3;
+ 
+-
+     input[1].cf[0] = -4, input[1].cf[1] = -3, input[1].cf[2] = -2, input[1].cf[3] = -25; /* input coeff */
+ 
+     /**
+@@ -71,7 +63,6 @@
+     rts[3].re = 0.20679876865588492 , rts[3].im = -0.5304573452575734;
+ 
+     /* initializes a positive cubic equation */
+-    input[2] = bn_Zero_poly;
+     input[2].dgr = 3;
+     input[2].cf[0] = 5478, input[2].cf[1] = 5485, input[2].cf[2] = 458, input[2].cf[3] = 786;/* input coeff */
+ 
+@@ -134,18 +125,19 @@
+ main(void)
+ {
+     int ret;
++
+     poly_init();
+     ret = test_bn_poly_cubic_rts();
+ 
+-    if (ret == 0) {
+-	bu_log("\nFunction computes correctly\n");
+-	return ret;
+-    } else
+-	exit(EXIT_FAILURE);
++    if (ret)
++	bu_log("[FAIL] %s test failed\n", __FILE__);
++    else
++	bu_log("[PASS] %s test passed\n", __FILE__);
+ 
+     return 0;
+ }
+ 
++
+ /*
+  * Local Variables:
+  * mode: C

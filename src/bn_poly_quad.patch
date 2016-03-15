@@ -1,0 +1,184 @@
+Index: src/libbn/tests/bn_poly_quadratic_roots.c
+===================================================================
+--- src/libbn/tests/bn_poly_quadratic_roots.c	(revision 0)
++++ src/libbn/tests/bn_poly_quadratic_roots.c	(revision 0)
+@@ -0,0 +1,153 @@
++/*  T E S T _ B N _ P O L Y _ Q U A D R A T I C _ R O O T S. C
++ * BRL-CAD
++ *
++ * Copyright (c) 2004-2013 United States Government as represented by
++ * the U.S. Army Research Laboratory.
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public License
++ * version 2.1 as published by the Free Software Foundation.
++ *
++ * This library is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this file; see the file named COPYING for more
++ * information.
++ */
++
++
++#include "common.h"
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <math.h>
++#include <string.h>
++#include <signal.h>
++
++#include "bu.h"
++#include "vmath.h"
++#include "bn.h"
++#include "magic.h"
++
++
++/* holds three polynomials to be used in test. */
++bn_poly_t input[3];
++bn_complex_t rts[4];
++
++struct bn_poly bn_Zero_poly = { BN_POLY_MAGIC, 0, {0.0} };
++
++
++/**
++ * Initialises quadratic equations storing a negative, positive and zero coefficients.
++ * Test polynomials will be of 4th, 3rd, and 2nd degrees
++ */
++void
++poly_init(void)
++{
++
++    /* initializes a zero equation */
++
++    input[0] = bn_Zero_poly;
++    input[0].dgr = 2;
++    input[0].cf[0] = input[0].cf[1] = input[0].cf[2] = 0.0;
++
++    rts[0].re = rts[0].im = 0.0;
++
++
++    /* initializes a negative quadratic eqn. */
++    input[1] = bn_Zero_poly;
++    input[1].dgr = 2;
++
++
++    input[1].cf[0] = -4, input[1].cf[1] = -3, input[1].cf[2] = -2;/* input coeff */
++
++    rts[1].re = -0.75, rts[1].im = 1.199;
++    rts[2].re = -0.75, rts[2].im = -1.199;
++
++
++    /* intializes a positive quadratic equation */
++    input[2] = bn_Zero_poly;
++    input[2].dgr = 2;
++    input[2].cf[0] = 5478, input[2].cf[1] = 5485, input[2].cf[2] = 458;/* input coeff */
++
++    rts[3].re = -1.1 , rts[3].im = 0.0;
++    rts[4].re = -10.876, rts[4].im = 0.0;
++
++
++    return;
++}
++
++
++/* compares the polynomial roots returning 0 if there are correct. */
++int
++chk_rts(bn_complex_t *r, bn_complex_t *rt, int i, int j)
++{
++    int val = -1;
++
++    if (EQUAL(r[i].re, rt[j].re) &&  EQUAL(r[i].im, rt[j].im) &&  EQUAL(r[i+1].re, rt[j+1].re) &&  EQUAL(r[i + 1].re, rt[j + 1].im))
++	val = 0;
++
++    else if (EQUAL(r[i].re, rt[j + 1].re) &&  EQUAL(r[i].im, rt[j + 1].im) &&  EQUAL(r[i + 1].re, rt[j].re) &&  EQUAL(r[i + 1].re, rt[j].im))
++	val = 0;
++
++
++    return val;
++}
++
++
++/* tests the polynomials to make sure bn_poly_mul() works properly. */
++int
++test_bn_poly_qua_rts(void)
++{
++    int val, val1, val2;/* variables get results for comparisms */
++    bn_complex_t r1[2],r2[2],r3[2];
++
++    bn_poly_quadratic_roots(r1,&input[0]);
++    bn_poly_quadratic_roots(r2,&input[1]);
++    bn_poly_quadratic_roots(r3,&input[2]);
++
++    /* checks polynomial roots for correctness. */
++    if (EQUAL(rts[0].im, r1[0].im) && EQUAL(rts[0].im, r1[1].im) && EQUAL(rts[0].re, r1[0].re) && EQUAL(rts[0].re, r1[1].re))
++	val = 0;
++
++    val1 = chk_rts(rts, r2, 1, 0);
++    val2 = chk_rts(rts, r3, 3,0);
++
++    if (val1 == val2 && val2 == val && val == 0)
++	return val;
++
++    return -1;
++
++}
++
++
++int
++main(void)
++{
++    int ret;
++    poly_init();
++    ret = test_bn_poly_qua_rts();
++
++    if (ret == 0) {
++	printf("\nFunction computes correctly\n");
++
++	return ret;
++    } else
++	exit(EXIT_FAILURE);
++
++    return 0;
++}
++
++
++/*
++ * Local Variables:
++ * mode: C
++ * tab-width: 8
++ * indent-tabs-mode: t
++ * c-file-style: "stroustrup"
++ * End:
++ * ex: shiftwidth=4 tabstop=8
++ */
+Index: src/libbn/tests/CMakeLists.txt
+===================================================================
+--- src/libbn/tests/CMakeLists.txt	(revision 56743)
++++ src/libbn/tests/CMakeLists.txt	(working copy)
+@@ -5,6 +5,10 @@
+ BRLCAD_ADDEXEC(tester_bn_poly_scale bn_poly_scale.c "libbu;libbn" NO_INSTALL)
+ 
+ 
++
++BRLCAD_ADDEXEC(tester_bn_poly_quad_rts bn_poly_quadratic_roots.c "libbu;libbn" NO_INSTALL)
++
++
+ # For tester_bn_tri_tri_isect_coplanar, the input format is as follows:
+ #
+ # tester_bn_tri_tri_isect_coplanar V0 V1 V2 U0 U1 U2 <area_flag> <expected result>
+@@ -71,6 +75,10 @@
+ add_test(bn_poly_scale                 tester_bn_poly_scale)
+ 
+ 
++
++
++add_test(bn_poly_quad_rts              tester_bn_poly_quad_rts)
++
+ # Local Variables:
+ # tab-width: 8
+ # mode: cmake

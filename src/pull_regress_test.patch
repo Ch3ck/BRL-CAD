@@ -1,0 +1,79 @@
+Index: regress/mged/pull.mged
+===================================================================
+--- regress/mged/pull.mged	(revision 0)
++++ regress/mged/pull.mged	(revision 0)
+@@ -0,0 +1,18 @@
++puts "*** Testing 'pull' command ***"
++
++in_arb8 pull 1
++in_arb8 pull 2
++comb pull_l2.c u pull_arb81.s u pull_arb82.s
++comb pull_l1.c u pull_l2.c
++arced pull_l1.c/pull_l2.c matrix rarc rot 14 14 14
++l pull_l1.c
++l pull_l2.c
++l pull_arb81.s
++l pull_arb82.s
++pull pull_l1.c
++pull pull_arb81.s
++l pull_l1.c
++l pull_l2.c
++l pull_arb81.s
++l pull_arb82.s
++
++puts "*** 'pull' testing completed ***"
+Index: regress/mged/CMakeLists.txt
+===================================================================
+--- regress/mged/CMakeLists.txt	(revision 57270)
++++ regress/mged/CMakeLists.txt	(working copy)
+@@ -49,6 +49,7 @@
+   plot.mged
+   prefix.mged
+   ps.mged
++  pull.mged
+   push.mged
+   putmat.mged
+   qorot.mged
+Index: regress/mged/mged.tcl
+===================================================================
+--- regress/mged/mged.tcl	(revision 57270)
++++ regress/mged/mged.tcl	(working copy)
+@@ -183,6 +183,7 @@
+ add_test arced mged
+ add_test copymat mged
+ add_test putmat mged
++add_test pull mged
+ add_test push mged
+ add_test xpush mged
+ add_test accept mged
+Index: regress/mged_test.sh
+===================================================================
+--- regress/mged_test.sh	(revision 57270)
++++ regress/mged_test.sh	(working copy)
+@@ -997,6 +997,26 @@
+ EOF
+ 
+ #
++#                  P U L L
++#
++cat > pull.mged_regress << EOF
++in pull1.s arb8 10 -9 -8 10 -1 -8 10 -1 0 10 -9 0 3 -9 -8 3 -1 -8 3 -1 0 3 -9 0
++in pull2.s arb8 10 -9 -8 10 -1 -8 10 -1 0 10 -9 0 3 -9 -8 3 -1 -8 3 -1 0 3 -9 0
++comb pull_l2.c u pull1.s u pull.s
++comb pull_l1.c u pull_l2.c
++arced pull_l1.c/pull_l2.c matrix rarc rot 14 14 14
++l pull_l1.c
++l pull_l2.c
++l pull1.s
++l pull2.s
++pull pull_l1.c
++l pull_l1.c
++l pull_l2.c
++l pull1.s
++l pull2.s
++EOF
++
++#
+ #                  P U S H
+ #
+ cat > push.mged_regress << EOF

@@ -1,0 +1,207 @@
+Index: src/libbn/mat.c
+===================================================================
+--- src/libbn/mat.c	(revision 56205)
++++ src/libbn/mat.c	(working copy)
+@@ -199,87 +199,72 @@
+ }
+ 
+ 
++
++/**
++ * B N _ M A T _ I N V E R S E
++ *
++ * The matrix pointed at by "input" is inverted and stored in the area
++ * pointed at by "output".
++ *
++ * Invert a 4-by-4 matrix using direct computation.
++ * Uses 100 multiplications and 61 additions or substractions, total.
++ *
++ * @return 1 if OK.
++ * @return 0 if matrix is singular.
++ */
+ int
+ bn_mat_inverse(register mat_t output, const mat_t input)
+ {
+-    register int i, j;	/* Indices */
+-    int k;		/* Indices */
+-    int z[4];		/* Temporary */
+-    fastf_t b[4];	/* Temporary */
+-    fastf_t c[4];	/* Temporary */
++    const fastf_t tmp01 = input[ 8] * input[ 2] - input[ 0] * input[10],
++                  tmp02 = input[12] * input[ 1] - input[ 0] * input[13],
++                  tmp03 = input[ 0] * input[15] - input[12] * input[ 3],
++                  tmp04 = input[14] * input[ 1] - input[13] * input[ 2],
++                  tmp05 = input[15] * input[ 1] - input[13] * input[ 3],
++                  tmp06 = input[14] * input[ 3] - input[15] * input[ 2],
++                  tmp07 = input[ 8] * input[ 1] - input[ 0] * input[ 9],
++                  tmp08 = input[ 8] * input[ 3] - input[ 0] * input[11],
++                  tmp09 = input[ 0] * input[14] - input[12] * input[ 2],
++                  tmp10 = input[ 2] * input[ 9] - input[ 1] * input[10],
++                  tmp11 = input[ 3] * input[ 9] - input[ 1] * input[11],
++                  tmp12 = input[ 3] * input[10] - input[ 2] * input[11],
++                  tmp13 = input[12] * input[ 9] - input[13] * input[ 8],
++                  tmp14 = input[12] * input[10] - input[14] * input[ 8],
++                  tmp15 = input[12] * input[11] - input[15] * input[ 8],
++                  tmp16 = input[13] * input[10] - input[14] * input[ 9],
++                  tmp17 = input[13] * input[11] - input[15] * input[ 9],
++                  tmp18 = input[14] * input[11] - input[15] * input[10];
++    const fastf_t det   = ( input[4] * ( tmp18 * input[1]
++                                       - tmp17 * input[2]
++                                       + tmp16 * input[3] )
++                          + input[5] * ( tmp15 * input[2]
++                                       - tmp18 * input[0]
++                                       - tmp14 * input[3] )
++                          + input[6] * ( tmp17 * input[0]
++                                       - tmp15 * input[1]
++                                       + tmp13 * input[3] )
++                          + input[7] * ( tmp14 * input[1]
++                                       - tmp16 * input[0]
++                                       - tmp13 * input[2] ) );
++    if (ZERO(det))
++        return 0;
++    
++    output[ 0] = (tmp17 * input[6] - tmp18 * input[5] - tmp16 * input[7]) / det;
++    output[ 1] = (tmp18 * input[1] - tmp17 * input[2] + tmp16 * input[3]) / det;
++    output[ 2] = (tmp06 * input[5] - tmp04 * input[7] + tmp05 * input[6]) / det;
++    output[ 3] = (tmp11 * input[6] - tmp12 * input[5] - tmp10 * input[7]) / det;
++    output[ 4] = (tmp18 * input[4] - tmp15 * input[6] + tmp14 * input[7]) / det;
++    output[ 5] = (tmp15 * input[2] - tmp18 * input[0] - tmp14 * input[3]) / det;
++    output[ 6] = (tmp09 * input[7] - tmp06 * input[4] - tmp03 * input[6]) / det;
++    output[ 7] = (tmp12 * input[4] - tmp08 * input[6] + tmp01 * input[7]) / det;
++    output[ 8] = (tmp15 * input[5] - tmp17 * input[4] - tmp13 * input[7]) / det;
++    output[ 9] = (tmp17 * input[0] - tmp15 * input[1] + tmp13 * input[3]) / det;
++    output[10] = (tmp03 * input[5] - tmp05 * input[4] + tmp02 * input[7]) / det;
++    output[11] = (tmp08 * input[5] - tmp11 * input[4] - tmp07 * input[7]) / det;
++    output[12] = (tmp16 * input[4] - tmp14 * input[5] + tmp13 * input[6]) / det;
++    output[13] = (tmp14 * input[1] - tmp16 * input[0] - tmp13 * input[2]) / det;
++    output[14] = (tmp04 * input[4] - tmp09 * input[5] - tmp02 * input[6]) / det;
++    output[15] = (tmp10 * input[4] - tmp01 * input[5] + tmp07 * input[6]) / det;
+ 
+-    MAT_COPY(output, input);	/* Duplicate */
+-
+-    /* Initialization */
+-    for (j = 0; j < 4; j++)
+-	z[j] = j;
+-
+-    /* Main Loop */
+-    for (i = 0; i < 4; i++) {
+-	register fastf_t y;		/* local temporary */
+-
+-	k = i;
+-	y = output[i*4+i];
+-	for (j = i+1; j < 4; j++) {
+-	    register fastf_t w;		/* local temporary */
+-
+-	    w = output[i*4+j];
+-	    if (fabs(w) > fabs(y)) {
+-		k = j;
+-		y = w;
+-	    }
+-	}
+-
+-	if (ZERO(y)) {
+-	    /* SINGULAR */
+-	    return 0;
+-	}
+-	y = 1.0 / y;
+-
+-	for (j = 0; j < 4; j++) {
+-	    register fastf_t temp;	/* Local */
+-
+-	    c[j] = output[j*4+k];
+-	    output[j*4+k] = output[j*4+i];
+-	    output[j*4+i] = - c[j] * y;
+-	    temp = output[i*4+j] * y;
+-	    b[j] = temp;
+-	    output[i*4+j] = temp;
+-	}
+-
+-	output[i*4+i] = y;
+-	j = z[i];
+-	z[i] = z[k];
+-	z[k] = j;
+-	for (k = 0; k < 4; k++) {
+-	    if (k == i)
+-		continue;
+-	    for (j = 0; j < 4; j++) {
+-		if (j == i)
+-		    continue;
+-		output[k*4+j] = output[k*4+j] - b[j] * c[k];
+-	    }
+-	}
+-    }
+-
+-    /* Second Loop */
+-    for (i = 0; i < 4; i++) {
+-	while ((k = z[i]) != i) {
+-	    int p;			/* Local temp */
+-
+-	    for (j = 0; j < 4; j++) {
+-		register fastf_t w;	/* Local temp */
+-
+-		w = output[i*4+j];
+-		output[i*4+j] = output[k*4+j];
+-		output[k*4+j] = w;
+-	    }
+-	    p = z[i];
+-	    z[i] = z[k];
+-	    z[k] = p;
+-	}
+-    }
+-
+     return 1;
+ }
+ 
+@@ -1047,32 +1032,29 @@
+ }
+ 
+ 
++/**
++ * B N _ M A T _ D E T E R M I N A N T
++ *
++ * Calculates the determinant of the 4X4 matrix
++ * (This implementation requires only 34 multiplications
++ *  and 20 additions or substractions, saving 6 multiplications
++ *  and 3 additions or substractions compared to the previous one.)
++ */
+ fastf_t
+-bn_mat_determinant(const mat_t m)
++bn_mat_determinant(const mat_t input)
+ {
+-    fastf_t det[4];
+-    fastf_t sum;
++    const fastf_t  tmp1 = input[12] * input[ 9] - input[13] * input[ 8];
++    const fastf_t  tmp2 = input[14] * input[ 8] - input[10] * input[12];
++    const fastf_t  tmp3 = input[14] * input[ 9] - input[10] * input[13];
+ 
+-    det[0] = m[5] * (m[10]*m[15] - m[11]*m[14])
+-	-m[6] * (m[ 9]*m[15] - m[11]*m[13])
+-	+m[7] * (m[ 9]*m[14] - m[10]*m[13]);
+-
+-    det[1] = m[4] * (m[10]*m[15] - m[11]*m[14])
+-	-m[6] * (m[ 8]*m[15] - m[11]*m[12])
+-	+m[7] * (m[ 8]*m[14] - m[10]*m[12]);
+-
+-    det[2] = m[4] * (m[ 9]*m[15] - m[11]*m[13])
+-	-m[5] * (m[ 8]*m[15] - m[11]*m[12])
+-	+m[7] * (m[ 8]*m[13] - m[ 9]*m[12]);
+-
+-    det[3] = m[4] * (m[ 9]*m[14] - m[10]*m[13])
+-	-m[5] * (m[ 8]*m[14] - m[10]*m[12])
+-	+m[6] * (m[ 8]*m[13] - m[ 9]*m[12]);
+-
+-    sum = m[0]*det[0] - m[1]*det[1] + m[2]*det[2] - m[3]*det[3];
+-
+-    return sum;
+-
++    return ( tmp3 * input[ 0] - tmp2 * input[ 1] - tmp1 * input[ 2] ) * input[ 7]
++         - ( tmp3 * input[ 4] - tmp2 * input[ 5] - tmp1 * input[ 6] ) * input[ 3]
++         + ( ( input[14] * input[ 1] - input[13] * input[ 2] ) * input[ 4]
++           + ( input[12] * input[ 2] - input[ 0] * input[14] ) * input[ 5]
++           + ( input[ 0] * input[13] - input[12] * input[ 1] ) * input[ 6] ) * input[11]
++         + ( ( input[ 2] * input[ 9] - input[ 1] * input[10] ) * input[ 4]
++           + ( input[ 0] * input[10] - input[ 8] * input[ 2] ) * input[ 5]
++           + ( input[ 8] * input[ 1] - input[ 0] * input[ 9] ) * input[ 6] ) * input[15];
+ }
+ 
+ 

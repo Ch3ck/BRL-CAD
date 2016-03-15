@@ -1,0 +1,437 @@
+Index: src/libged/wdb_obj.c
+===================================================================
+--- src/libged/wdb_obj.c	(revision 57314)
++++ src/libged/wdb_obj.c	(working copy)
+@@ -6551,6 +6551,197 @@
+ }
+ 
+ 
++void
++wdb_pull_comb(struct db_i *dbip,
++	  struct directory *dp,
++	  genptr_t mp);
++	  
++/* This restores the matrix transformation at a combination by taking leaf matrix tranformations, inverting
++ * and storing the changes at the combinations.
++ */
++static void
++wdb_pull_comb_mat(struct db_i *dbip, struct rt_comb_internal *UNUSED(comb), union tree *comb_leaf, matp_t mp, genptr_t UNUSED(usr_ptr2),
++	      genptr_t UNUSED(usr_ptr3), genptr_t UNUSED(usr_ptr4))
++{
++    struct directory *dp;
++    mat_t inv_mat;
++    matp_t mat = mp;
++
++    RT_CK_DBI(dbip);
++    RT_CK_TREE(comb_leaf);
++
++    if ((dp = db_lookup(dbip, comb_leaf->tr_l.tl_name, LOOKUP_NOISY)) == RT_DIR_NULL)
++	return;
++
++    if (!comb_leaf->tr_l.tl_mat) {
++	comb_leaf->tr_l.tl_mat = (matp_t)bu_malloc(sizeof(mat_t), "tl_mat");
++	MAT_COPY(comb_leaf->tr_l.tl_mat, mat);
++
++	return;
++    }
++
++    /* invert the matrix transformation of the leaf and store new matrix  at comb */
++    bn_mat_inverse(inv_mat, comb_leaf->tr_l.tl_mat );
++
++    /* multiply inverse and store at combination */
++    bn_mat_mul2(inv_mat,mat);
++    MAT_COPY(comb_leaf->tr_l.tl_mat, mat);
++    wdb_pull_comb(dbip, dp, mp);
++}
++
++
++/* pull_comb(): This routine enters a comb restoring the matrix transformation at the combination
++ *              calls and calls pull_comb_mat() which updates current matrix transformation and moves up tree.
++ * Note:        the generic pointer points to a matrix if successful or a string if unsuccessful.
++ */
++void
++wdb_pull_comb(struct db_i *dbip,
++	  struct directory *dp,
++	  genptr_t mp)
++{
++    struct rt_db_internal intern;
++    struct rt_comb_internal *comb;
++    matp_t mat = (matp_t)mp;
++    mat_t m;
++    mat_t invMat;
++
++    if (dp->d_flags & RT_DIR_SOLID)
++	return;
++    if (rt_db_get_internal(&intern, dp, dbip, m, &rt_uniresource) < 0) {
++	Tcl_AppendResult(dbip->dbi_wdbp->wdb_interp,"Database read error, aborting\n");
++	return;
++    }
++
++    comb = (struct rt_comb_internal *)intern.idb_ptr;
++
++    /* checks if matrix pointer is valid */
++    if (mat == NULL) {
++	mat = (matp_t)bu_malloc(sizeof(mat_t), "cur_mat");
++	MAT_IDN(mat);
++    }
++
++    bn_mat_inverse(invMat, mat);
++    bn_mat_mul2(mat,m);
++    MAT_COPY(mat, m);/* updates current matrix pointer */
++
++    if (comb->tree) {
++	db_tree_funcleaf(dbip, comb, comb->tree, wdb_pull_comb_mat,
++			 &m, (genptr_t)NULL, (genptr_t)NULL, (genptr_t)NULL);
++
++	if (rt_db_put_internal(dp, dbip, &intern, &rt_uniresource) < 0) {
++	    Tcl_AppendResult(dbip->dbi_wdbp->wdb_interp,"Cannot write modified combination (%s) to database\n", dp->d_namep);
++	    return;
++	}
++    }
++}
++
++
++/**
++ * P U L L _ L E A F
++ *
++ * @brief
++ * This routine takes the internal database representation of a leaf node or
++ * primitive object and builds  a matrix transformation, closest to this node's,
++ * sets these values to default and returns matrix.
++ */
++static void
++wdb_pull_leaf(struct db_i *UNUSED(dbip),
++	  struct directory *UNUSED(dp),
++	  genptr_t UNUSED(mp))
++{
++    return;
++}
++
++
++int
++wdb_pull_cmd(struct rt_wdb *wdbp,
++	     int argc,
++	     const char *argv[])
++{
++    struct directory *dp;
++    struct resource *resp;
++    mat_t mat;
++    int c;
++    int debug;
++    static const char *usage = "object";
++
++    resp = &rt_uniresource;
++    rt_init_resource( &rt_uniresource, 0, NULL );
++
++    WDB_TCL_CHECK_READ_ONLY;
++    
++    /* must be wanting help */
++    if (argc == 1) {
++	Tcl_AppendResult(wdbp->wdb_interp,"helplib_alias wdb_pull Usage: %s %s", argv[0], usage);
++	return TCL_ERROR;
++    }
++
++    if (argc != 2) {
++	Tcl_AppendResult(wdbp->wdb_interp, "Usage: %s %s", argv[0], usage);
++	return TCL_ERROR;
++    }
++
++    debug = RT_G_DEBUG;
++
++    /* get directory pointer for arg */
++    if ((dp = db_lookup(wdbp->dbip,  argv[1], LOOKUP_NOISY)) == RT_DIR_NULL)
++	return GED_ERROR;
++
++    /* Checks whether the object is a primitive.*/
++    if (dp->d_flags & RT_DIR_SOLID) {
++	Tcl_AppendResult(wdbp->wdb_interp,"Attempt to pull primitive, aborting.\n");
++	return TCL_ERROR;
++    }
++
++    /* Parse options */
++    bu_optind = 1;	/* re-init bu_getopt() */
++    while ((c = bu_getopt(argc, (char * const *)argv, "d")) != -1) {
++	switch (c) {
++	   case 'd':
++		RTG.debug |= DEBUG_TREEWALK;
++		break;
++	  case '?':
++	  default:
++		Tcl_AppendResult(wdbp->wdb_interp, "pull: usage pull [-d] root \n");
++		break;
++	}
++    }
++
++    /*
++     * uses a no frills walk routine recursively moving up the tree
++     * from the leaves performing the necessary matrix transformations moving up
++     * right to the the head of the tree pulling objects.
++     * All new changes are immediately written to database
++     */
++    db_functree(wdbp->dbip, dp, wdb_pull_comb, wdb_pull_leaf, resp, &mat);
++    
++    RTG.debug = debug;
++    
++
++   return TCL_OK;
++}
++
++/**
++ * @brief
++ * The pull command is used to move matrices from combinations
++ * and leaves up to the head of the tree defined by the object.
++ *
++ * the -d flag turns on the treewalker debugging output.
++ *
++ * Usage:
++ * procname pull object(s)
++ */    
++int
++wdb_pull_tcl(void *clientData, 
++             int argc,  
++             const char *argv[])
++{
++    struct rt_wdb *wdbp = (struct rt_wdb *)clientData;
++    
++    return wdb_pull_cmd(wdbp, argc-1, argv+1);
++}
++
++
+ /** structure to hold all solids that have been pushed. */
+ struct wdb_push_id {
+     uint32_t magic;
+Index: src/tclscripts/helplib.tcl
+===================================================================
+--- src/tclscripts/helplib.tcl	(revision 57314)
++++ src/tclscripts/helplib.tcl	(working copy)
+@@ -111,6 +111,7 @@
+ set helplib_data(wdb_pathlist)		{{name(s)}	{list all paths from name(s) to leaves}}
+ set helplib_data(wdb_paths)		{{pattern}	{lists all paths matching input path}}
+ set helplib_data(wdb_prcolor)		{{} {print color table}}
++set helplib_data(wdb_pull)             {{object(s)} {pull object(s) path transformations from solids}}
+ set helplib_data(wdb_push)		{{object(s)} {push object(s) path transformations to solids}}
+ set helplib_data(wdb_put)		{{object type attrs} {create a database object}}
+ set helplib_data(wdb_region)		{{object(s)} {create or append objects to a region}}
+Index: src/tclscripts/archer/ArcherCore.tcl
+===================================================================
+--- src/tclscripts/archer/ArcherCore.tcl	(revision 57314)
++++ src/tclscripts/archer/ArcherCore.tcl	(working copy)
+@@ -271,6 +271,7 @@
+ 	method protate             {args}
+ 	method pscale              {args}
+ 	method ptranslate          {args}
++	method pull                {args}
+ 	method push                {args}
+ 	method put                 {args}
+ 	method put_comb            {args}
+@@ -582,7 +583,7 @@
+ 	    killtree l ls make make_bb make_name make_pnts man mater mirror move \
+ 	    move_arb_edge move_arb_face mv mvall nmg_collapse \
+ 	    nmg_simplify ocenter opendb orotate oscale otranslate p q \
+-	    quit packTree prefix protate pscale ptranslate push put \
++	    quit packTree prefix protate pscale ptranslate pull push put \
+ 	    put_comb putmat pwd r rcodes red rfarb rm rmater rotate \
+ 	    rotate_arb_face scale search sed shader shells tire title \
+ 	    track translate unhide units unpackTree vmake wmater xpush \
+@@ -6725,6 +6726,10 @@
+     eval gedWrapper ptranslate 0 0 1 0 $args
+ }
+ 
++::itcl::body ArcherCore::pull {args} {
++    eval gedWrapper pull 0 1 1 0 $args
++}
++
+ ::itcl::body ArcherCore::push {args} {
+     eval gedWrapper push 0 1 1 0 $args
+ }
+Index: src/tclscripts/lib/Ged.tcl
+===================================================================
+--- src/tclscripts/lib/Ged.tcl	(revision 57314)
++++ src/tclscripts/lib/Ged.tcl	(working copy)
+@@ -536,6 +536,7 @@
+ 	method preview {args}
+ 	method prim_label {args}
+ 	method ps {args}
++	method pull {args}
+ 	method push {args}
+ 	method put {args}
+ 	method put_comb {args}
+Index: src/tclscripts/lib/Mged.tcl
+===================================================================
+--- src/tclscripts/lib/Mged.tcl	(revision 57314)
++++ src/tclscripts/lib/Mged.tcl	(working copy)
+@@ -117,6 +117,7 @@
+ 	method pathlist {args}
+ 	method paths {args}
+ 	method prcolor {args}
++	method pull {args}
+ 	method push {args}
+ 	method put {args}
+ 	method r {args}
+Index: src/tclscripts/lib/Db.tcl
+===================================================================
+--- src/tclscripts/lib/Db.tcl	(revision 57314)
++++ src/tclscripts/lib/Db.tcl	(working copy)
+@@ -95,6 +95,7 @@
+ 	method pathlist {args}
+ 	method paths {args}
+ 	method prcolor {args}
++	method pull {args}
+ 	method push {args}
+ 	method put {args}
+ 	method r {args}
+Index: src/tclscripts/mged/help.tcl
+===================================================================
+--- src/tclscripts/mged/help.tcl	(revision 57314)
++++ src/tclscripts/mged/help.tcl	(working copy)
+@@ -246,6 +246,7 @@
+ set mged_help_data(prj_add)	{{ [-t] [-b] [-n] shaderfile [image_file] [image_width] [image_height]} {Appends image filename + current view parameters to shaderfile}}
+ set mged_help_data(preview)	{{[-v] [-o imagename.ext] [-d sec_delay] [-D start frame] [-K last frame] rt_script_file}	{preview new style RT animation script}}
+ set mged_help_data(ps)		{{[-f font] [-t title] [-c creator] [-s size in inches] [-l linewidth] file}	{creates a postscript file of the current view}}
++set mged_help_data(pull)       $helplib_data(wdb_pull)
+ set mged_help_data(push)	$helplib_data(wdb_push)
+ set mged_help_data(put)		$helplib_data(wdb_put)
+ set mged_help_data(putmat)	{{a/b {I | m0 m1 ... m16}}	{replace matrix on combination's arc}}
+Index: doc/html/manuals/librt/wdb_obj.html
+===================================================================
+--- doc/html/manuals/librt/wdb_obj.html	(revision 57314)
++++ doc/html/manuals/librt/wdb_obj.html	(working copy)
+@@ -364,6 +364,18 @@
+ when drawing wireframe.
+ </DD>
+ <P>
++<DT><I>dbName</I> <A NAME="pull"><B>pull</B></A> &lt;<I>objects</I>&gt</DT>
++<DD>Pulls the effects of all transformation 
++matrices that appear in the 
++<a href="../mged/brlcad_glossary.html#SOLID">primitive solids</a> in the trees
++to  the specified <I>objects</I> head up the tree. This will restore
++the parameters of the <I>primitive solids</I> if any of the
++transformation matrices are present. All the transformation
++matrices visited will correspond to the current matrix transformation for that node. This command will fail,
++and no changes will be made, if any <I>primitive solid</I> referenced as
++the list of <I>objects</I>.
++</DD>
++<P>
+ <DT><I>dbName</I> <A NAME="push"><B>push</B></A> &lt;<I>objects</I>&gt</DT>
+ <DD>Force the effects of all transformation
+ matrices that appear in any
+Index: doc/html/manuals/mged/mged_cmd_index.html
+===================================================================
+--- doc/html/manuals/mged/mged_cmd_index.html	(revision 57314)
++++ doc/html/manuals/mged/mged_cmd_index.html	(working copy)
+@@ -331,6 +331,8 @@
+ <TD WIDTH="19%" VALIGN="MIDDLE">
+ <FONT SIZE=2><P></FONT><A HREF="#ps"><FONT SIZE=2>ps</FONT></A></TD>
+ <TD WIDTH="20%" VALIGN="MIDDLE">
++<FONT SIZE=2><P></FONT><A HREF="#pull"><FONT SIZE=2>pull</FONT></A></TD>
++<TD WIDTH="21%" VALIGN="MIDDLE">
+ <FONT SIZE=2><P></FONT><A HREF="#push"><FONT SIZE=2>push</FONT></A></TD>
+ <TD WIDTH="22%" VALIGN="MIDDLE">
+ <FONT SIZE=2><P></FONT><A HREF="#putmat"><FONT SIZE=2>putmat</FONT></A></TD>
+@@ -2518,6 +2520,17 @@
+ 
+ <P><HR ALIGN="RIGHT"></P>
+ </FONT><B><DL>
++<DT><A NAME="pull"></A>pull</B> &lt;<I>objects</I>&gt;</DT>
++<DD>The &quot;pull&quot; command pulls the effects of all transformation matrices that appear in any <A HREF="#SOLID">primitive shapes</A> or <A HREF="#COMBINATION">combinations</A> in the trees up to the specified <I>objects</I> heading the tree. This will restore the original the parameters of the <I>primitive shapes</I> if any of the transformation matrices are not identity matrices.  All the transformation matrices visited up the tree will be set to the current transformation matrix.  This command will fail, and no changes will be made, if the head is referenced by a <I>primitive shape</I>.</DD>
++<FONT SIZE=4><DT>Examples:</DT>
++</FONT><TT><DD>mged&gt;</TT> <B>pull group1 regiona</DD>
++</DL><DIR>
++
++</B><FONT SIZE=2><P>-- Pull  the effects of any transformation matrices from the <I>primitive shapes.</I> in the trees up to the heads indicated by <I>group1</I> and <I>regiona</I> </P>
++</DIR>
++
++<P><HR ALIGN="RIGHT"></P>
++</FONT><B><DL>
+ <DT><A NAME="push"></A>push</B> &lt;<I>objects</I>&gt;</DT>
+ <DD>The &quot;push&quot; command forces the effects of all transformation matrices that appear in any <A HREF="#COMBINATION">combinations</A> in the trees from the specified <I>objects</I> down to the <A HREF="#SOLID">primitive shapes</A>. This will change the parameters of the <I>primitive shapes</I> if any of the transformation matrices are not identity matrices.  All the transformation matrices visited will be set to identity matrices.  This command will fail, and no changes will be made, if any <I>primitive shape</I> referenced by the list of <I>objects</I> is positioned differently in two or more <I>combinations</I>.  The <A HREF="#xpush">xpush</A> command will perform a similar function, even if some shapes are multiply referenced.</DD>
+ <FONT SIZE=4><DT>Examples:</DT>
+Index: doc/docbook/system/mann/en/pull.xml
+===================================================================
+--- doc/docbook/system/mann/en/pull.xml	(revision 0)
++++ doc/docbook/system/mann/en/pull.xml	(revision 0)
+@@ -0,0 +1,59 @@
++<!-- Converted by db4-upgrade version 1.0 -->
++
++<refentry xmlns="http://docbook.org/ns/docbook" version="5.0" xml:id="pull">
++
++<refmeta>
++  <refentrytitle>PULL</refentrytitle>
++  <manvolnum>nged</manvolnum>
++  <refmiscinfo class="source">BRL-CAD</refmiscinfo>
++  <refmiscinfo class="manual">BRL-CAD User Commands</refmiscinfo>
++</refmeta>
++
++<refnamediv xml:id="name">
++  <refname>pull</refname>
++  <refpurpose>Pulls the effects of all transformation matrices that appear in
++	any combinations or primitives in the trees from the leaves up to the specified <emphasis>objects</emphasis> or node.
++   </refpurpose>
++</refnamediv>
++
++<!-- body begins here -->
++<refsynopsisdiv xml:id="synopsis">
++  <cmdsynopsis sepchar=" ">
++    <command>pull</command>
++      <arg choice="opt" rep="norepeat"><replaceable>objects</replaceable></arg>
++  </cmdsynopsis>
++</refsynopsisdiv>
++
++<refsection xml:id="description"><title>DESCRIPTION</title>
++
++  <para>Pulls the effects of all matrix transformations that appear in
++	any combinations or primitives in the tree from the leaves up to the specified <emphasis>objects</emphasis>. This will restore the parameters of the <emphasis>primitive shapes</emphasis> if any of the transformation matrices were not identity matrices. All the transformation matrices visited will be set to the current transformation matrix as it moves up the tree. This command will fail, and no changes will be made, if the specified <emphasis>object</emphasis> is a primitive shape referenced by the list of <emphasis>objects</emphasis>.
++   </para>
++</refsection>
++
++<refsection xml:id="examples"><title>EXAMPLES</title>
++
++  <para>The example shows the use of the <command>pull</command> command to pull the effects of any transformation matrices from leaves(primitive shapes) of a tree up to the specified head objects.
++  </para>
++
++  <example><title>Pull the effects of any transformation matrices from the leaves(primitive shapes) of the tree up to the specified head nodes(objects).</title>
++
++    <para>
++      <prompt>mged&gt;</prompt><userinput>pull group1 regiona</userinput>
++    </para>
++    <para>Pulls the effects of any transformation matrices from the primitive shapes in the tree up to the root nodes specified by <emphasis>group1</emphasis> 	and <emphasis>regiona</emphasis>.
++    </para>
++  </example>
++
++</refsection>
++
++<refsection xml:id="author"><title>AUTHOR</title><para>BRL-CAD Team</para></refsection>
++
++<refsection xml:id="bug_reports"><title>BUG REPORTS</title>
++
++  <para>
++    Reports of bugs or problems should be submitted via electronic
++    mail to &lt;devs@brlcad.org&gt;, or via the "cadbug.sh" script.
++  </para>
++</refsection>
++</refentry>
+Index: doc/docbook/system/mann/en/CMakeLists.txt
+===================================================================
+--- doc/docbook/system/mann/en/CMakeLists.txt	(revision 57314)
++++ doc/docbook/system/mann/en/CMakeLists.txt	(working copy)
+@@ -159,6 +159,7 @@
+   preview.xml
+   prj_add.xml
+   ps.xml
++  pull.xml
+   push.xml
+   put_comb.xml
+   putmat.xml
+Index: doc/docbook/system/mann/en/aproposlib.xml
+===================================================================
+--- doc/docbook/system/mann/en/aproposlib.xml	(revision 57314)
++++ doc/docbook/system/mann/en/aproposlib.xml	(working copy)
+@@ -58,7 +58,7 @@
+ mat_lookat mat_mul mat_scale_about_pt mat_trn mat_vec_ortho mat_vec_perp
+ mat_xform_about_pt mat_xrot mat_yrot mat_zrot quat_mat2quat quat_quat2mat
+ vo_model2view vo_pmat vo_pmodel2view vo_rmat vo_view2model wdb_attr wdb_bot_decimate
+-wdb_list wdb_match wdb_nmg_collapse wdb_paths wdb_push wdb_search wdb_showmats
++wdb_list wdb_match wdb_nmg_collapse wdb_paths wdb_pull wdb_push wdb_search wdb_showmats
+ wdb_xpush
+ 	</literallayout>
+       </para>
